@@ -39,7 +39,7 @@ function startGame() {
         setupControls();
         
         // Lancer la boucle
-        requestAnimationFrame(gameLoop);
+        gameLoop();
     });
 }
 
@@ -50,7 +50,12 @@ database.ref('players').on('value', (snapshot) => {
 
 // 3. Contrôles
 const keys = {};
+let controlsSetup = false;
+
 function setupControls() {
+    if (controlsSetup) return; // Éviter les doublons
+    controlsSetup = true;
+    
     window.addEventListener('keydown', (e) => keys[e.key] = true);
     window.addEventListener('keyup', (e) => keys[e.key] = false);
 
@@ -62,6 +67,8 @@ function setupControls() {
         const dx = e.clientX - me.x;
         const dy = e.clientY - me.y;
         const angle = Math.atan2(dy, dx);
+
+        console.log("Tir ! Angle:", angle, "Position:", me.x, me.y);
 
         // Créer un projectile dans Firebase
         const bulletRef = database.ref('bullets').push();
