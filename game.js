@@ -12,7 +12,8 @@ const MAP_HEIGHT = canvas.height - MAP_PADDING * 2;
 let myId = null;
 let players = {}; // Stocke tous les joueurs
 let bullets = {}; // Stocke les projectiles du serveur
-let me = { x: 0, y: 0, color: 'white', name: '' };
+let me = { x: 0, y: 0, color: 'white', name: '', health: 100 };
+const MAX_HEALTH = 100;
 
 // 1. Démarrage du jeu
 function startGame() {
@@ -25,8 +26,8 @@ function startGame() {
         me.name = nameInput;
         me.x = MAP_PADDING + Math.random() * MAP_WIDTH;
         me.y = MAP_PADDING + Math.random() * MAP_HEIGHT;
-        me.color = `hsl(${Math.random() * 360}, 70%, 50%)`;
-
+        me.color = document.getElementById('colorPicker').value;
+        me.health = MAX_HEALTH;
         // Créer la référence du joueur dans Firebase
         const playerRef = database.ref('players/' + myId);
         playerRef.set(me);
@@ -132,11 +133,20 @@ function gameLoop() {
         if (myId && b.ownerId !== myId) {
             const dist = Math.hypot(me.x - b.x, me.y - b.y);
             if (dist < 25) { // 20 (taille joueur) + 5 (taille balle)
-                console.log("Touché !");
-                // Réinitialiser la position
-                me.x = MAP_PADDING + Math.random() * MAP_WIDTH;
-                me.y = MAP_PADDING + Math.random() * MAP_HEIGHT;
-                database.ref('players/' + myId).update({ x: me.x, y: me.y });
+                me.health -= 10;
+                console.log("Touché ! Santé: " + me.health);
+                
+                // Si mort, respawn
+                if (me.health <= 0) {
+                    me.health = MAX_HEALTH;
+                    me.x = MAP_PADDING + Math.random() * MAP_WIDTH;
+                    me.y = MAP_PADDING + Math.random() * MAP_HEIGHT;
+                }
+                
+                database.ref('players/' + myId).update({ x: me.x, y: me.y, health: me.health });
+                
+                // Supprimer la bullet après collision
+                database.ref('bullets').child(id).remove();
             }
         }
     }
@@ -144,15 +154,28 @@ function gameLoop() {
     // Dessiner tous les joueurs
     for (let id in players) {
         const p = players[id];
+        const health = p.health || MAX_HEALTH;
+        
         ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
         ctx.fill();
         
+        // Barre de santé
+        const healthPercent = Math.max(0, health / MAX_HEALTH);
+        ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : healthPercent > 0.25 ? '#ffff00' : '#ff0000';
+        ctx.fillRect(p.x - 20, p.y - 35, 40 * healthPercent, 4);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(p.x - 20, p.y - 35, 40, 4);
+        
+        // Pseudo et santé
         ctx.fillStyle = "white";
-        ctx.font = "12px Arial";
+        ctx.font = "bold 12px Arial";
         ctx.textAlign = "center";
         ctx.fillText(p.name, p.x, p.y - 30);
+        ctx.font = "10px Arial";
+        ctx.fillText(Math.max(0, Math.floor(health)), p.x, p.y - 17);
     }
 
     requestAnimationFrame(gameLoop);
