@@ -92,12 +92,10 @@ database.ref('bullets').on('value', (snapshot) => {
 });
 
 // 4. Boucle de jeu (60 FPS)
+// 4. Boucle de jeu (60 FPS)
 function gameLoop() {
-    // Fond stylé avec dégradé
-    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#1a1a2e');
-    gradient.addColorStop(1, '#16213e');
-    ctx.fillStyle = gradient;
+    // Fond
+    ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Dessiner la bordure de la map
@@ -105,7 +103,6 @@ function gameLoop() {
     ctx.lineWidth = 3;
     ctx.strokeRect(MAP_PADDING, MAP_PADDING, MAP_WIDTH, MAP_HEIGHT);
 
-    // Mouvement local
     if (myId) {
         let moved = false;
         if (keys['ArrowUp'] || keys['z']) { me.y -= 5; moved = true; }
@@ -113,21 +110,20 @@ function gameLoop() {
         if (keys['ArrowLeft'] || keys['q']) { me.x -= 5; moved = true; }
         if (keys['ArrowRight'] || keys['d']) { me.x += 5; moved = true; }
 
-        // Clamp aux limites de la map
         me.x = Math.max(MAP_PADDING + 20, Math.min(MAP_PADDING + MAP_WIDTH - 20, me.x));
         me.y = Math.max(MAP_PADDING + 20, Math.min(MAP_PADDING + MAP_HEIGHT - 20, me.y));
 
-        // Mettre à jour Firebase seulement si on bouge (optimisation)
         if (moved) {
             database.ref('players/' + myId).update({ x: me.x, y: me.y });
         }
     }
 
-    // Dessiner les projectiles
+    // --- GESTION DES PROJECTILES ---
     for (let id in bullets) {
         const b = bullets[id];
         
-        // Mise à jour locale de la position pour la fluidité
+        // On fait avancer la balle localement
+        // Note : On ajoute une propriété "age" pour éviter de les recalculer sans fin
         b.x += b.vx;
         b.y += b.vy;
 
@@ -136,24 +132,20 @@ function gameLoop() {
         ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Détection de collision (très basique)
+        // Détection de collision (seulement si la balle n'est pas la nôtre)
         if (myId && b.ownerId !== myId) {
             const dist = Math.hypot(me.x - b.x, me.y - b.y);
-            if (dist < 25) { // 20 (taille joueur) + 5 (taille balle)
+            if (dist < 25) { 
                 me.health -= 10;
-                console.log("Touché ! Santé: " + me.health);
+                // On supprime la balle du serveur immédiatement après impact
+                database.ref('bullets').child(id).remove();
                 
-                // Si mort, respawn
                 if (me.health <= 0) {
                     me.health = MAX_HEALTH;
                     me.x = MAP_PADDING + Math.random() * MAP_WIDTH;
                     me.y = MAP_PADDING + Math.random() * MAP_HEIGHT;
                 }
-                
                 database.ref('players/' + myId).update({ x: me.x, y: me.y, health: me.health });
-                
-                // Supprimer la bullet après collision
-                database.ref('bullets').child(id).remove();
             }
         }
     }
@@ -162,7 +154,6 @@ function gameLoop() {
     for (let id in players) {
         const p = players[id];
         const health = p.health || MAX_HEALTH;
-        
         ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
@@ -172,22 +163,15 @@ function gameLoop() {
         const healthPercent = Math.max(0, health / MAX_HEALTH);
         ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : healthPercent > 0.25 ? '#ffff00' : '#ff0000';
         ctx.fillRect(p.x - 20, p.y - 35, 40 * healthPercent, 4);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(p.x - 20, p.y - 35, 40, 4);
         
-        // Pseudo et santé
         ctx.fillStyle = "white";
         ctx.font = "bold 12px Arial";
         ctx.textAlign = "center";
-        ctx.fillText(p.name, p.x, p.y - 30);
-        ctx.font = "10px Arial";
-        ctx.fillText(Math.max(0, Math.floor(health)), p.x, p.y - 17);
+        ctx.fillText(p.name, p.x, p.y - 40);
     }
 
     requestAnimationFrame(gameLoop);
 }
-
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
